@@ -11,18 +11,21 @@ fh_function='fh() {
   fi
 }'
 
+# Define the content of .bashrc_custom
+custom_content="# .bashrc_custom
+# Custom functions and aliases
+
+$fh_function
+
+# Aliases
+alias fcd='cd \$(find * -type d | fzf)'
+alias vf='vim \$(fzf)'
+alias fhf='history | fzf'"
+
+# Write or overwrite .bashrc_custom
+echo "$custom_content" > ~/.bashrc_custom
+
 # Check if the function already exists in ~/.bashrc
-if ! grep -qxF "fh() {" ~/.bashrc; then
-  echo "$fh_function" >> ~/.bashrc
-fi
-
-# Define the aliases
-aliases='
-alias fcd="cd \$(find * -type d | fzf)"
-alias vf="vim \$(fzf)"
-alias fhf="history | fzf"'
-
-# Check if the aliases already exist in ~/.bashrc
-if ! grep -qxF "alias fcd=" ~/.bashrc || ! grep -qxF "alias vf=" ~/.bashrc || ! grep -qxF "alias fhf=" ~/.bashrc; then
-  echo "$aliases" >> ~/.bashrc
+if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
+  echo "source ~/.bashrc_custom" >> ~/.bashrc
 fi

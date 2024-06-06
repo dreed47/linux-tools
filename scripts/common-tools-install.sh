@@ -11,6 +11,11 @@ fh_function='fh() {
   fi
 }'
 
+# Check if the function already exists in ~/.bashrc
+if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
+  echo "source ~/.bashrc_custom" >> ~/.bashrc
+fi
+
 # Define the content of .bashrc_custom
 custom_content="# .bashrc_custom
 # Custom functions and aliases
@@ -22,23 +27,15 @@ alias fcd='cd \$(find * -type d | fzf)'
 alias vf='vim \$(fzf)'
 alias fhf='history | fzf'
 export LS_OPTIONS='--color=auto'
-alias ls='ls $LS_OPTIONS'
-alias ll='ls $LS_OPTIONS -l'
-alias l='ls $LS_OPTIONS -la'
+eval '\$(dircolors)'
+alias ls='ls \$LS_OPTIONS'
+alias ll='ls \$LS_OPTIONS -l'
+alias l='ls \$LS_OPTIONS -la'
 alias rm='rm -i'
 alias cp='cp -i'
-alias mv='mv -i'
-
-"
-
+alias mv='mv -i'"
 
 # Write or overwrite .bashrc_custom
 echo "$custom_content" > ~/.bashrc_custom
 
-# Check if the function already exists in ~/.bashrc
-if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
-  echo "source ~/.bashrc_custom" >> ~/.bashrc
-fi
-
-eval "$(dircolors)"
 source ~/.bashrc

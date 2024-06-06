@@ -10,3 +10,5 @@ curl -sSfL https://github.com/dreed47/linux-tools/raw/main/scripts/.bashrc_custo
 if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
   echo "source ~/.bashrc_custom" >> ~/.bashrc
 fi
+
+source ~/.bashrc

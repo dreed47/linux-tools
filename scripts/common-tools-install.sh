@@ -10,6 +10,7 @@ echo "${YELLOW}Installing fzf...${RESET}"
 apt-get install fzf
 
 echo "${YELLOW}Downloading .bashrc_custom from the remote location...${RESET}"
+rm -rvf ~/.bashrc_custom
 curl -sSfL https://github.com/dreed47/linux-tools/raw/main/scripts/.bashrc_custom -o ~/.bashrc_custom
 
 # Check if the bashrc_custom call already exists in ~/.bashrc

@@ -10,7 +10,7 @@ alias mv='mv -i'
 alias fcd='cd \$(find * -type d | fzf)'
 alias vf='vim \$(fzf)'
 alias fhf='history | fzf'
-alias install-common-tools='bash -c \"\$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)\"'
+alias install-common-tools='bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)"'
 
 fh() {
   # Use fzf to select a command from history and run it

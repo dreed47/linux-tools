@@ -9,6 +9,7 @@ apt-get update
 echo "${YELLOW}Installing fzf...${RESET}"
 apt-get install fzf
 
+echo "..."
 echo "${YELLOW}Removing old .bashrc_custom if it exists...${RESET}"
 rm -rvf ~/.bashrc_custom
 echo "${YELLOW}Downloading .bashrc_custom from the remote location...${RESET}"

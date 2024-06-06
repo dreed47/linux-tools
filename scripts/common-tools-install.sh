@@ -22,7 +22,6 @@ alias fcd='cd \$(find * -type d | fzf)'
 alias vf='vim \$(fzf)'
 alias fhf='history | fzf'
 export LS_OPTIONS='--color=auto'
-eval '$(dircolors)'
 alias ls='ls $LS_OPTIONS'
 alias ll='ls $LS_OPTIONS -l'
 alias l='ls $LS_OPTIONS -la'
@@ -41,4 +40,5 @@ if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
   echo "source ~/.bashrc_custom" >> ~/.bashrc
 fi
 
+eval "$(dircolors)"
 source ~/.bashrc

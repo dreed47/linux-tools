@@ -40,3 +40,5 @@ echo "$custom_content" > ~/.bashrc_custom
 if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
   echo "source ~/.bashrc_custom" >> ~/.bashrc
 fi
+
+source ~/.bashrc

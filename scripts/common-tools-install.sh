@@ -9,8 +9,9 @@ apt-get update
 echo "${YELLOW}Installing fzf...${RESET}"
 apt-get install fzf
 
-echo "${YELLOW}Downloading .bashrc_custom from the remote location...${RESET}"
+echo "${YELLOW}Removing old .bashrc_custom if it exists...${RESET}"
 rm -rvf ~/.bashrc_custom
+echo "${YELLOW}Downloading .bashrc_custom from the remote location...${RESET}"
 curl -sSfL https://github.com/dreed47/linux-tools/raw/main/scripts/.bashrc_custom -o ~/.bashrc_custom
 
 # Check if the bashrc_custom call already exists in ~/.bashrc

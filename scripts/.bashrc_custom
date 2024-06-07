@@ -1,3 +1,8 @@
+# Define colors for status messages
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+RESET=$(tput sgr0) # Reset color
+
 # You may uncomment the following lines if you want `ls' to be colorized:
 export LS_OPTIONS='--color=auto'
 eval "$(dircolors)"
@@ -15,7 +20,7 @@ alias cbu='custom-bashrc-update'
 alias s='source_bashrc_with_message'
 
 source_bashrc_with_message() {
-  echo "Reloading ~/.bashrc..."
+  echo "${YELLOW}Reloading ~/.bashrc...${RESET}"
   source ~/.bashrc
 }
 

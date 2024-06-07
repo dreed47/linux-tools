@@ -12,7 +12,12 @@ alias vf='vim \$(fzf)'
 alias fhf='history | fzf'
 alias custom-bashrc-update='bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)"'
 alias cbu='custom-bashrc-update'
-alias s='source ~/.bashrc'
+alias s='source_bashrc_with_message'
+
+source_bashrc_with_message() {
+  echo "Reloading ~/.bashrc..."
+  source ~/.bashrc
+}
 
 fh() {
   # Use fzf to select a command from history and run it

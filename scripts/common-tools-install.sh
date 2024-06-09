@@ -15,6 +15,14 @@ rm -rvf ~/.bashrc_custom
 echo "${YELLOW}Downloading .bashrc_custom from the remote location...${RESET}"
 curl -sSfL https://github.com/dreed47/linux-tools/raw/main/scripts/.bashrc_custom -o ~/.bashrc_custom
 
+echo "${YELLOW}Downloading menu_functions.sh from the remote location...${RESET}"
+curl -sSfL https://github.com/dreed47/linux-tools/raw/main/scripts/menu_functions.sh -o ~/menu_functions.sh
+
+echo "${YELLOW}Downloading menu.sh from the remote location...${RESET}"
+curl -sSfL https://github.com/dreed47/linux-tools/raw/main/scripts/menu.sh -o ~/menu.sh
+
+chmod 777 ~/menu.sh
+
 # Check if the bashrc_custom call already exists in ~/.bashrc
 if ! grep -qxF "source ~/.bashrc_custom" ~/.bashrc; then
   echo "${YELLOW}Adding source ~/.bashrc_custom to ~/.bashrc...${RESET}"

@@ -21,7 +21,8 @@ handle_selection() {
         echo -e "\nPress any key to exit..."
         read -n 1 -s
     else
-        echo "Exiting..."
+        clear
+        echo "Exiting menu..."
     fi
 }
 

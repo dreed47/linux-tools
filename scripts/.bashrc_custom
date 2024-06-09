@@ -15,16 +15,11 @@ alias mv='mv -i'
 alias fcd='cd \$(find * -type d | fzf)'
 alias vf='vim \$(fzf)'
 alias fhf='history | fzf'
-alias m='show_menu'
+alias m='~/menu.sh'
 
 #alias custom-bashrc-update='bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)"'
 alias cbu='custom_bashrc_update'
 alias s='source_bashrc_with_message'
-
-show_menu() {
-  exe ~/menu.sh
-}
-
 
 source_bashrc_with_message() {
   echo "${YELLOW}Reloading ~/.bashrc...${RESET}"

@@ -10,6 +10,7 @@ options=(
     ["LXC Updater"]='bash -c "$(wget -qLO - https://github.com/tteck/Proxmox/raw/main/misc/update-lxcs.sh)"'
     ["List all LXC containers"]="pct list"
     ["List All Virtual Machines"]="qm list"
+    ["List Available Templates"]="pveam available"
     ["Show Proxmox Version"]="pveversion"
     ["Update custom bashrc"]="source ~/.bashrc; custom_bashrc_update"
 )
@@ -19,6 +20,7 @@ option_labels=("Reload bashrc"
                "LXC Updater"
                "List all LXC containers"
                "List All Virtual Machines"
+               "List Available Templates"
                "Show Proxmox Version"
                "Update custom bashrc"
                "Quit")

@@ -3,7 +3,7 @@
 # Function to display the menu
 display_menu() {
     clear
-    echo "Please select an option (use arrow keys to navigate and Enter to select):"
+    echo "Select an option (use arrow keys to navigate and Enter to select):"
     for i in "${!option_labels[@]}"; do
         if [[ $i -eq $1 ]]; then
             echo -e "\e[1;32m> ${option_labels[$i]}\e[0m"

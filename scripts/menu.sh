@@ -16,13 +16,13 @@ options=(
 )
 
 # Array of option labels, including the Quit option
-option_labels=("Reload bashrc"
-               "LXC Updater"
+option_labels=("LXC Updater"
                "List all LXC containers"
                "List All Virtual Machines"
                "List Available Templates"
                "Show Proxmox Version"
                "Update custom bashrc"
+               "Reload bashrc"
                "Quit")
 
 

@@ -15,13 +15,19 @@ alias mv='mv -i'
 alias fcd='cd \$(find * -type d | fzf)'
 alias vf='vim \$(fzf)'
 alias fhf='history | fzf'
-alias custom-bashrc-update='bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)"'
+
+#alias custom-bashrc-update='bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)"'
 alias cbu='custom-bashrc-update'
 alias s='source_bashrc_with_message'
 
 source_bashrc_with_message() {
   echo "${YELLOW}Reloading ~/.bashrc...${RESET}"
   source ~/.bashrc
+}
+
+custom_bashrc_update() {
+  echo "${YELLOW}Updating custom bashrc file...${RESET}"
+  bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-tools-install.sh)"
 }
 
 fh() {

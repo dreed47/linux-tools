@@ -1,5 +1,10 @@
 # proxmox linux tools
 
+```bash
+bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/menu.sh)"
+
+```
+
 ## Proxmox Node Tools
 
 ```bash

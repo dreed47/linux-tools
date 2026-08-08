@@ -1,6 +1,6 @@
 #!/bin/bash
 # Debian 12 to 13 Upgrade Script for Proxmox LXC Containers
-# Version: 2.1 - Generic, no bc dependency, no hardcoded services
+# Version: 2.2 - Proper Docker handling
 # Date: 2026-08-08
 
 set -euo pipefail
@@ -23,6 +23,7 @@ REQUIRED_SPACE_MB=$((REQUIRED_SPACE_GB * 1024))
 BACKUP_SOURCES="/etc/apt/sources.list.backup-$(date +%Y%m%d)"
 CLEANUP_PERFORMED=false
 POST_CLEANUP_PERFORMED=false
+DOCKER_INSTALLED=false
 
 # Error handling function
 error_exit() {
@@ -68,6 +69,103 @@ check_root() {
     fi
 }
 
+# Check if Docker is installed
+check_docker() {
+    if command -v docker &>/dev/null || dpkg -l | grep -q "docker.io\|docker-ce\|docker-cli"; then
+        DOCKER_INSTALLED=true
+        info "Docker detected - will handle gracefully during upgrade"
+        
+        # Check which Docker packages are installed
+        DOCKER_PACKAGES=$(dpkg -l | grep -E "docker" | awk '{print $2}' | tr '\n' ' ')
+        info "Installed Docker packages: $DOCKER_PACKAGES"
+    fi
+}
+
+# Handle Docker packages pre-upgrade
+handle_docker_pre_upgrade() {
+    if [[ "$DOCKER_INSTALLED" == true ]]; then
+        info "Handling Docker packages pre-upgrade..."
+        
+        # Remove conflicting docker-buildx-plugin if it exists (will be replaced)
+        if dpkg -l | grep -q "docker-buildx-plugin"; then
+            warning "Removing docker-buildx-plugin (will be replaced by docker-buildx)"
+            apt remove -y docker-buildx-plugin 2>/dev/null || true
+        fi
+        
+        # Remove docker-ce-cli if installed (will use docker-cli from Debian)
+        if dpkg -l | grep -q "docker-ce-cli"; then
+            warning "Removing docker-ce-cli (will use docker-cli from Debian)"
+            apt remove -y docker-ce-cli 2>/dev/null || true
+        fi
+        
+        # Remove docker-ce if installed (will use docker.io from Debian)
+        if dpkg -l | grep -q "docker-ce"; then
+            warning "Removing docker-ce (will use docker.io from Debian)"
+            apt remove -y docker-ce 2>/dev/null || true
+        fi
+        
+        # Keep docker.io if installed
+        if dpkg -l | grep -q "docker.io"; then
+            info "Keeping docker.io package"
+        fi
+        
+        # Keep docker-cli if installed
+        if dpkg -l | grep -q "docker-cli"; then
+            info "Keeping docker-cli package"
+        fi
+        
+        # Fix any broken packages before upgrade
+        apt --fix-broken install -y 2>/dev/null || true
+    fi
+}
+
+# Handle Docker packages post-upgrade
+handle_docker_post_upgrade() {
+    if [[ "$DOCKER_INSTALLED" == true ]]; then
+        info "Reinstalling Docker packages post-upgrade..."
+        
+        # Install Docker from Debian 13 repositories
+        apt install -y docker.io docker-cli docker-buildx docker-compose-plugin 2>/dev/null || {
+            warning "Some Docker packages couldn't be installed from Debian repos"
+            warning "You may need to reinstall Docker manually"
+        }
+        
+        # If Docker was using the official repo, re-add it
+        if [[ -f /etc/apt/sources.list.d/docker.list.bak ]] || [[ -f /etc/apt/sources.list.d/docker-ce.list.bak ]]; then
+            info "Restoring Docker repository..."
+            if [[ -f /etc/apt/sources.list.d/docker.list.bak ]]; then
+                mv /etc/apt/sources.list.d/docker.list.bak /etc/apt/sources.list.d/docker.list 2>/dev/null || true
+            fi
+            if [[ -f /etc/apt/sources.list.d/docker-ce.list.bak ]]; then
+                mv /etc/apt/sources.list.d/docker-ce.list.bak /etc/apt/sources.list.d/docker-ce.list 2>/dev/null || true
+            fi
+            
+            # Update and install Docker from official repo
+            apt update 2>/dev/null || true
+            apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin 2>/dev/null || {
+                warning "Could not reinstall Docker from official repo"
+                warning "You may need to reinstall Docker manually"
+            }
+        fi
+        
+        # Start Docker if it's not running
+        if systemctl is-active --quiet docker 2>/dev/null; then
+            info "Docker is already running"
+        else
+            info "Starting Docker service..."
+            systemctl start docker 2>/dev/null || true
+            systemctl enable docker 2>/dev/null || true
+        fi
+        
+        # Check Docker status
+        if docker --version &>/dev/null; then
+            success "Docker reinstalled successfully: $(docker --version 2>/dev/null)"
+        else
+            warning "Docker may need manual reinstallation"
+        fi
+    fi
+}
+
 # Check disk space with cleanup option
 check_disk_space() {
     info "Checking available disk space..."
@@ -89,6 +187,7 @@ check_disk_space() {
         echo "  - Cleaning APT cache"
         echo "  - Removing old logs"
         echo "  - Cleaning build caches"
+        echo "  - Cleaning Docker (if installed)"
         echo ""
         read -p "Would you like to attempt cleanup to free space? (y/n): " -r
         echo ""
@@ -172,7 +271,6 @@ perform_pre_cleanup() {
     rm -rf /var/tmp/* 2>/dev/null || true
     
     echo -e "${BLUE}9. Looking for build caches to clean...${NC}"
-    # Check for common build cache directories
     for cache_dir in /opt/*/.next/cache /opt/*/node_modules/.cache /var/www/*/.next/cache /home/*/.next/cache /root/*/.next/cache; do
         if [[ -d "$cache_dir" ]]; then
             CACHE_SIZE=$(du -sm "$cache_dir" 2>/dev/null | awk '{print $1}' || echo "0")
@@ -181,10 +279,13 @@ perform_pre_cleanup() {
         fi
     done
     
-    # Check for Docker/Podman
+    echo -e "${BLUE}10. Cleaning Docker (if installed)...${NC}"
     if command -v docker &>/dev/null; then
-        echo -e "${BLUE}10. Cleaning Docker...${NC}"
+        # Clean Docker images, containers, and volumes
         docker system prune -a -f 2>/dev/null || true
+        docker volume prune -f 2>/dev/null || true
+        docker network prune -f 2>/dev/null || true
+        echo -e "${GREEN}  Cleaned Docker resources${NC}"
     fi
     
     if command -v podman &>/dev/null; then
@@ -241,36 +342,22 @@ perform_post_cleanup() {
         fi
     fi
     
-    echo -e "${BLUE}5. Removing orphaned packages...${NC}"
-    if command -v deborphan &>/dev/null; then
-        ORPHANS=$(deborphan 2>/dev/null || echo "")
-        if [[ -n "$ORPHANS" ]]; then
-            apt remove -y $ORPHANS 2>/dev/null || true
-            echo -e "${GREEN}  Removed orphaned packages${NC}"
-        else
-            echo -e "${GREEN}  No orphaned packages found${NC}"
-        fi
-    fi
-    
-    echo -e "${BLUE}6. Removing old log files...${NC}"
+    echo -e "${BLUE}5. Removing old log files...${NC}"
     find /var/log -name "*.gz" -delete 2>/dev/null || true
     find /var/log -name "*.1" -delete 2>/dev/null || true
     find /var/log -name "*.old" -delete 2>/dev/null || true
     
-    echo -e "${BLUE}7. Cleaning journal logs (keep 7 days)...${NC}"
+    echo -e "${BLUE}6. Cleaning journal logs (keep 7 days)...${NC}"
     journalctl --vacuum-time=7d 2>/dev/null || true
     
-    echo -e "${BLUE}8. Removing temporary files...${NC}"
+    echo -e "${BLUE}7. Removing temporary files...${NC}"
     rm -rf /tmp/* 2>/dev/null || true
     rm -rf /var/tmp/* 2>/dev/null || true
     
-    echo -e "${BLUE}9. Removing upgrade script backup files...${NC}"
-    find /etc/apt/sources.list.d -name "*.bak" -mtime +7 -delete 2>/dev/null || true
-    
-    echo -e "${BLUE}10. Removing Python bytecode cache...${NC}"
+    echo -e "${BLUE}8. Removing Python bytecode cache...${NC}"
     find /usr -name "*.pyc" -type f -delete 2>/dev/null || true
     
-    echo -e "${BLUE}11. Removing package manager leftovers...${NC}"
+    echo -e "${BLUE}9. Removing package manager leftovers...${NC}"
     find /etc -name "*.dpkg-old" -delete 2>/dev/null || true
     find /etc -name "*.dpkg-dist" -delete 2>/dev/null || true
     
@@ -405,7 +492,17 @@ perform_minimal_upgrade() {
 # Perform full distribution upgrade
 perform_full_upgrade() {
     info "Performing full distribution upgrade..."
-    apt full-upgrade -y || error_exit "Full distribution upgrade failed"
+    
+    # First, handle Docker pre-upgrade
+    handle_docker_pre_upgrade
+    
+    # Now run the full upgrade
+    apt full-upgrade -y || {
+        warning "Full upgrade had issues. Attempting to fix..."
+        apt --fix-broken install -y
+        apt full-upgrade -y || error_exit "Full distribution upgrade failed"
+    }
+    
     success "Full distribution upgrade completed"
 }
 
@@ -435,6 +532,7 @@ main() {
     echo ""
     
     check_root
+    check_docker
     check_current_version
     check_disk_space
     
@@ -451,6 +549,9 @@ main() {
     
     perform_minimal_upgrade
     perform_full_upgrade
+    
+    # Handle Docker post-upgrade
+    handle_docker_post_upgrade
     
     verify_upgrade
     perform_post_cleanup
@@ -487,6 +588,12 @@ main() {
     echo "  # Or check specific services with:"
     echo "  systemctl status <service-name>"
     echo ""
+    if [[ "$DOCKER_INSTALLED" == true ]]; then
+        echo -e "${YELLOW}Verify Docker is working:${NC}"
+        echo "  docker --version"
+        echo "  docker ps"
+        echo ""
+    fi
     echo -e "${GREEN}Available disk space after upgrade and cleanup:${NC}"
     df -h /
 }

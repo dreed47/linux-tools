@@ -11,7 +11,7 @@ bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/c
 
 ```bash
 bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/common-container-tools-install.sh)"
-
+bash -c "$(wget -qLO - https://github.com/dreed47/linux-tools/raw/main/scripts/upgrade-debian-12-to-13.sh)"
 ```
 
 ## Proxmox Node Space Cleanup

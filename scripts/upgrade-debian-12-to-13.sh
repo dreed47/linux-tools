@@ -1,7 +1,6 @@
 #!/bin/bash
 # Debian 12 to 13 Upgrade Script for Proxmox LXC Containers
-# Enhanced with pre-upgrade and post-upgrade cleanup
-# Version: 2.0 - No bc dependency
+# Version: 2.1 - Generic, no bc dependency, no hardcoded services
 # Date: 2026-08-08
 
 set -euo pipefail
@@ -31,7 +30,7 @@ error_exit() {
     echo -e "${YELLOW}Check log file: $LOG_FILE${NC}"
     echo -e "${YELLOW}To rollback to Debian 12, run:${NC}"
     echo "  cp $BACKUP_SOURCES /etc/apt/sources.list"
-    echo "  apt update && apt downgrade --allow-downgrades -y"
+    echo "  apt update"
     exit 1
 }
 
@@ -86,7 +85,7 @@ check_disk_space() {
         warning "Insufficient disk space. Available: ${AVAILABLE_GB_DISPLAY}, Required: ${REQUIRED_GB_DISPLAY}"
         echo ""
         echo -e "${YELLOW}The script can attempt to clean up space by:${NC}"
-        echo "  - Removing pnpm/npm caches"
+        echo "  - Removing pnpm/npm/yarn caches"
         echo "  - Cleaning APT cache"
         echo "  - Removing old logs"
         echo "  - Cleaning build caches"
@@ -120,7 +119,7 @@ check_disk_space() {
         else
             echo -e "${YELLOW}Options to free space:${NC}"
             echo "  1. Expand disk from Proxmox: pct resize <CT_ID> rootfs +4G"
-            echo "  2. Manually clean: rm -rf /root/.local/share/pnpm/store/*"
+            echo "  2. Manually clean: npm cache clean --force"
             echo "  3. Clean logs: journalctl --vacuum-size=100M"
             echo ""
             error_exit "Insufficient disk space. Please free up space and try again."
@@ -137,7 +136,13 @@ perform_pre_cleanup() {
     
     local BEFORE_SPACE=$(df -m / | awk 'NR==2 {print $3}')
     
-    echo -e "${BLUE}1. Cleaning pnpm store cache...${NC}"
+    echo -e "${BLUE}1. Cleaning npm cache...${NC}"
+    npm cache clean --force 2>/dev/null || true
+    
+    echo -e "${BLUE}2. Cleaning yarn cache...${NC}"
+    yarn cache clean 2>/dev/null || true
+    
+    echo -e "${BLUE}3. Cleaning pnpm store cache...${NC}"
     if [[ -d /root/.local/share/pnpm/store ]]; then
         PNPM_SIZE=$(du -sm /root/.local/share/pnpm/store 2>/dev/null | awk '{print $1}' || echo "0")
         rm -rf /root/.local/share/pnpm/store/v10/* 2>/dev/null || true
@@ -146,32 +151,29 @@ perform_pre_cleanup() {
         echo -e "${GREEN}  Removed ~${PNPM_SIZE}MB from pnpm cache${NC}"
     fi
     
-    echo -e "${BLUE}2. Cleaning npm cache...${NC}"
-    npm cache clean --force 2>/dev/null || true
-    
-    echo -e "${BLUE}3. Cleaning APT cache...${NC}"
+    echo -e "${BLUE}4. Cleaning APT cache...${NC}"
     apt clean 2>/dev/null || true
     apt autoclean 2>/dev/null || true
     rm -rf /var/cache/apt/archives/*.deb 2>/dev/null || true
     
-    echo -e "${BLUE}4. Removing old package downloads...${NC}"
-    rm -rf /var/cache/apt/*.bin 2>/dev/null || true
+    echo -e "${BLUE}5. Removing old package lists...${NC}"
+    rm -rf /var/lib/apt/lists/* 2>/dev/null || true
     
-    echo -e "${BLUE}5. Cleaning journal logs...${NC}"
+    echo -e "${BLUE}6. Cleaning journal logs...${NC}"
     journalctl --vacuum-size=100M 2>/dev/null || true
     
-    echo -e "${BLUE}6. Removing old rotated logs...${NC}"
+    echo -e "${BLUE}7. Removing old rotated logs...${NC}"
     find /var/log -name "*.gz" -delete 2>/dev/null || true
     find /var/log -name "*.1" -delete 2>/dev/null || true
     find /var/log -name "*.old" -delete 2>/dev/null || true
     
-    echo -e "${BLUE}7. Cleaning temporary files...${NC}"
+    echo -e "${BLUE}8. Cleaning temporary files...${NC}"
     rm -rf /tmp/* 2>/dev/null || true
     rm -rf /var/tmp/* 2>/dev/null || true
     
-    echo -e "${BLUE}8. Looking for build caches to clean...${NC}"
+    echo -e "${BLUE}9. Looking for build caches to clean...${NC}"
     # Check for common build cache directories
-    for cache_dir in /opt/*/.next/cache /opt/*/node_modules/.cache /var/www/*/.next/cache /home/*/.next/cache; do
+    for cache_dir in /opt/*/.next/cache /opt/*/node_modules/.cache /var/www/*/.next/cache /home/*/.next/cache /root/*/.next/cache; do
         if [[ -d "$cache_dir" ]]; then
             CACHE_SIZE=$(du -sm "$cache_dir" 2>/dev/null | awk '{print $1}' || echo "0")
             rm -rf "$cache_dir"/* 2>/dev/null || true
@@ -181,12 +183,12 @@ perform_pre_cleanup() {
     
     # Check for Docker/Podman
     if command -v docker &>/dev/null; then
-        echo -e "${BLUE}9. Cleaning Docker...${NC}"
+        echo -e "${BLUE}10. Cleaning Docker...${NC}"
         docker system prune -a -f 2>/dev/null || true
     fi
     
     if command -v podman &>/dev/null; then
-        echo -e "${BLUE}10. Cleaning Podman...${NC}"
+        echo -e "${BLUE}11. Cleaning Podman...${NC}"
         podman system prune -a -f 2>/dev/null || true
     fi
     
@@ -207,7 +209,6 @@ perform_post_cleanup() {
     local BEFORE_SPACE=$(df -m / | awk 'NR==2 {print $3}')
     
     echo -e "${BLUE}1. Removing downloaded Debian package files...${NC}"
-    # Remove all .deb files that were downloaded for the upgrade
     DEB_COUNT=$(find /var/cache/apt/archives -name "*.deb" 2>/dev/null | wc -l)
     if [[ $DEB_COUNT -gt 0 ]]; then
         DEB_SIZE=$(du -sm /var/cache/apt/archives 2>/dev/null | awk '{print $1}' || echo "0")
@@ -218,7 +219,6 @@ perform_post_cleanup() {
     fi
     
     echo -e "${BLUE}2. Removing obsolete packages...${NC}"
-    # Remove packages that were automatically installed and are no longer needed
     OBSOLETE=$(apt autoremove --dry-run 2>/dev/null | grep -c "Remv" || echo "0")
     if [[ $OBSOLETE -gt 0 ]]; then
         apt autoremove -y 2>/dev/null || true
@@ -232,11 +232,8 @@ perform_post_cleanup() {
     apt autoclean 2>/dev/null || true
     
     echo -e "${BLUE}4. Removing old kernel packages (if any)...${NC}"
-    # In containers, kernels aren't used, but they might be installed
     if command -v dpkg &>/dev/null; then
-        # Get current kernel version
         CURRENT_KERNEL=$(uname -r 2>/dev/null || echo "")
-        # Remove old kernel images (keep current)
         OLD_KERNELS=$(dpkg -l | grep -E "linux-image-[0-9]" | grep -v "$CURRENT_KERNEL" | awk '{print $2}' || echo "")
         if [[ -n "$OLD_KERNELS" ]]; then
             echo -e "${YELLOW}  Found old kernel packages. Removing...${NC}"
@@ -270,11 +267,10 @@ perform_post_cleanup() {
     echo -e "${BLUE}9. Removing upgrade script backup files...${NC}"
     find /etc/apt/sources.list.d -name "*.bak" -mtime +7 -delete 2>/dev/null || true
     
-    echo -e "${BLUE}10. Checking for large duplicate files...${NC}"
-    # Find and remove duplicate .pyc files (Python bytecode)
+    echo -e "${BLUE}10. Removing Python bytecode cache...${NC}"
     find /usr -name "*.pyc" -type f -delete 2>/dev/null || true
     
-    # Remove backup files from package upgrades
+    echo -e "${BLUE}11. Removing package manager leftovers...${NC}"
     find /etc -name "*.dpkg-old" -delete 2>/dev/null || true
     find /etc -name "*.dpkg-dist" -delete 2>/dev/null || true
     
@@ -286,7 +282,6 @@ perform_post_cleanup() {
     success "Post-upgrade cleanup completed! Freed approximately ${FREED_GB_DISPLAY}"
     echo ""
     
-    # Show current disk usage
     echo -e "${BLUE}Current disk usage:${NC}"
     df -h /
     echo ""
@@ -307,7 +302,6 @@ check_third_party_repos() {
     if [[ -d /etc/apt/sources.list.d ]]; then
         for repo in /etc/apt/sources.list.d/*.list; do
             if [[ -f "$repo" ]]; then
-                # Skip if it's a backup file
                 if [[ ! "$repo" =~ \.bak$ ]]; then
                     THIRD_PARTY_REPOS+=("$repo")
                     warning "Found third-party repo: $repo"
@@ -380,14 +374,12 @@ check_upgrade_size() {
     info "Checking upgrade size requirements..."
     apt update || error_exit "Failed to update package lists"
     
-    # Get upgrade size
     UPGRADE_INFO=$(apt full-upgrade --dry-run 2>/dev/null | grep -E "Need to get|After this operation" || echo "")
     
     if [[ -n "$UPGRADE_INFO" ]]; then
         echo -e "${BLUE}Upgrade size information:${NC}"
         echo "$UPGRADE_INFO"
         
-        # Extract download size
         DOWNLOAD_SIZE=$(echo "$UPGRADE_INFO" | grep "Need to get" | awk '{print $4, $5}' || echo "")
         if [[ -n "$DOWNLOAD_SIZE" ]]; then
             info "Download size: $DOWNLOAD_SIZE"
@@ -396,7 +388,6 @@ check_upgrade_size() {
         warning "Could not determine upgrade size"
     fi
     
-    # Confirm with user
     echo -e "${YELLOW}Proceed with upgrade? (y/n):${NC} "
     read -r response
     if [[ ! "$response" =~ ^[Yy]$ ]]; then
@@ -433,7 +424,6 @@ verify_upgrade() {
         fi
     fi
     
-    # Check for broken packages
     apt --fix-broken install --dry-run | grep -q "0 upgraded, 0 newly installed" || warning "Possible broken packages detected"
 }
 
@@ -444,42 +434,32 @@ main() {
     echo -e "${GREEN}========================================${NC}"
     echo ""
     
-    # Pre-flight checks
     check_root
     check_current_version
     check_disk_space
     
-    # Backup
     backup_sources
     check_third_party_repos
     
-    # Disable third-party repos
     if [[ ${#THIRD_PARTY_REPOS[@]} -gt 0 ]]; then
         disable_third_party_repos
     fi
     
-    # Update and upgrade
     update_package_lists
     update_sources
     check_upgrade_size
     
-    # Perform upgrades
     perform_minimal_upgrade
     perform_full_upgrade
     
-    # Verify the upgrade worked
     verify_upgrade
-    
-    # Post-upgrade cleanup - ALWAYS runs after successful upgrade
     perform_post_cleanup
     
-    # Re-enable third-party repos
     if [[ ${#THIRD_PARTY_REPOS[@]} -gt 0 ]]; then
         enable_third_party_repos
         update_package_lists
     fi
     
-    # Final steps
     echo ""
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}  Upgrade Complete!${NC}"
@@ -498,9 +478,14 @@ main() {
     echo -e "${YELLOW}It's recommended to reboot the container:${NC}"
     echo "  reboot"
     echo ""
-    echo -e "${YELLOW}After reboot, verify with:${NC}"
+    echo -e "${YELLOW}After reboot, verify the upgrade with:${NC}"
     echo "  cat /etc/os-release"
-    echo "  systemctl status uptime-kuma"
+    echo ""
+    echo -e "${YELLOW}Check that your applications are running:${NC}"
+    echo "  # List all running services"
+    echo "  systemctl --type=service --state=running"
+    echo "  # Or check specific services with:"
+    echo "  systemctl status <service-name>"
     echo ""
     echo -e "${GREEN}Available disk space after upgrade and cleanup:${NC}"
     df -h /

@@ -1,6 +1,7 @@
 #!/bin/bash
 # Debian 12 to 13 Upgrade Script for Proxmox LXC Containers
 # Enhanced with pre-upgrade and post-upgrade cleanup
+# Version: 2.0 - No bc dependency
 # Date: 2026-08-08
 
 set -euo pipefail
@@ -49,6 +50,18 @@ info() {
     echo -e "${BLUE}[INFO]${NC} $1"
 }
 
+# Convert MB to GB for display (bash integer math)
+mb_to_gb() {
+    local mb=$1
+    local gb=$((mb / 1024))
+    local remainder=$((mb % 1024))
+    if [[ $remainder -gt 0 ]]; then
+        echo "${gb}.${remainder:0:2}GB"
+    else
+        echo "${gb}GB"
+    fi
+}
+
 # Check if running as root
 check_root() {
     if [[ $EUID -ne 0 ]]; then
@@ -65,11 +78,12 @@ check_disk_space() {
         error_exit "Could not determine available disk space"
     fi
     
-    AVAILABLE_GB=$(echo "scale=2; $AVAILABLE_SPACE / 1024" | bc)
-    info "Available space: ${AVAILABLE_GB}GB (${REQUIRED_SPACE_GB}GB required)"
+    AVAILABLE_GB_DISPLAY=$(mb_to_gb $AVAILABLE_SPACE)
+    REQUIRED_GB_DISPLAY="${REQUIRED_SPACE_GB}GB"
+    info "Available space: ${AVAILABLE_GB_DISPLAY} (${REQUIRED_GB_DISPLAY} required)"
     
     if [[ $AVAILABLE_SPACE -lt $REQUIRED_SPACE_MB ]]; then
-        warning "Insufficient disk space. Available: ${AVAILABLE_GB}GB, Required: ${REQUIRED_SPACE_GB}GB"
+        warning "Insufficient disk space. Available: ${AVAILABLE_GB_DISPLAY}, Required: ${REQUIRED_GB_DISPLAY}"
         echo ""
         echo -e "${YELLOW}The script can attempt to clean up space by:${NC}"
         echo "  - Removing pnpm/npm caches"
@@ -84,8 +98,8 @@ check_disk_space() {
             perform_pre_cleanup
             # Re-check space after cleanup
             AVAILABLE_SPACE=$(df -m / | awk 'NR==2 {print $4}')
-            AVAILABLE_GB=$(echo "scale=2; $AVAILABLE_SPACE / 1024" | bc)
-            info "Available space after cleanup: ${AVAILABLE_GB}GB"
+            AVAILABLE_GB_DISPLAY=$(mb_to_gb $AVAILABLE_SPACE)
+            info "Available space after cleanup: ${AVAILABLE_GB_DISPLAY}"
             
             if [[ $AVAILABLE_SPACE -lt $REQUIRED_SPACE_MB ]]; then
                 echo -e "${YELLOW}Still insufficient space after cleanup.${NC}"
@@ -112,7 +126,7 @@ check_disk_space() {
             error_exit "Insufficient disk space. Please free up space and try again."
         fi
     else
-        success "Sufficient disk space available: ${AVAILABLE_GB}GB"
+        success "Sufficient disk space available: ${AVAILABLE_GB_DISPLAY}"
     fi
 }
 
@@ -178,10 +192,10 @@ perform_pre_cleanup() {
     
     local AFTER_SPACE=$(df -m / | awk 'NR==2 {print $3}')
     FREED_SPACE=$((BEFORE_SPACE - AFTER_SPACE))
-    FREED_GB=$(echo "scale=2; $FREED_SPACE / 1024" | bc)
+    FREED_GB_DISPLAY=$(mb_to_gb $FREED_SPACE)
     
     echo ""
-    success "Pre-upgrade cleanup completed! Freed approximately ${FREED_GB}GB"
+    success "Pre-upgrade cleanup completed! Freed approximately ${FREED_GB_DISPLAY}"
     echo ""
 }
 
@@ -266,10 +280,10 @@ perform_post_cleanup() {
     
     local AFTER_SPACE=$(df -m / | awk 'NR==2 {print $3}')
     FREED_SPACE=$((BEFORE_SPACE - AFTER_SPACE))
-    FREED_GB=$(echo "scale=2; $FREED_SPACE / 1024" | bc)
+    FREED_GB_DISPLAY=$(mb_to_gb $FREED_SPACE)
     
     echo ""
-    success "Post-upgrade cleanup completed! Freed approximately ${FREED_GB}GB"
+    success "Post-upgrade cleanup completed! Freed approximately ${FREED_GB_DISPLAY}"
     echo ""
     
     # Show current disk usage
